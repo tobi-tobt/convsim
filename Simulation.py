@@ -40,6 +40,7 @@ class Simulation:
                  transmission_rate=0.0,
                  non_central_cos3_effect=False,
                  non_central_coll_effect=False,
+                 septal_penetration=0.0,
                  small_value_clip=1e-3,
                  ):
 
@@ -74,8 +75,9 @@ class Simulation:
         # non-central cos3 effect can be simulated:
         self.non_central_cos3_effect = non_central_cos3_effect
 
-        # Currently not used anymore, because only a single non-central coll. map is calculate:
+        # A single non-central collimation map is calculated, where kappa represents the septal penetration:
         self.non_central_coll_effect = non_central_coll_effect
+        self.kappa = np.float32(septal_penetration)
         # To suppress small numbers emerging from the Fourier domain:
         self.small_value_clip = small_value_clip
 
@@ -229,7 +231,14 @@ class Simulation:
 
             # Rotate image to mimic mirroring effect:
             temp_dect = np.rot90(temp_dect, 2)
+
+            # New: added transmission already here and not in get_summed_detector_image_conv.
+            t = self.transmission_rate
+            temp_dect = (1 - t) * temp_dect + t * np.sum(this_slice)
+
+            # Store result in the array:
             self.Detector_images_2D_raw[:, :, i] = temp_dect
+
 
     # ------- COS3 EFFECT SIMULATION -------
     def calc_cos3_map(self, z):
@@ -355,7 +364,7 @@ class Simulation:
         alpha_map = np.arccos(d / (2 * r))
 
         # Collimation correction factor:
-        coll_map = (2 * alpha_map * r - d * np.sin(alpha_map)) / (np.pi * r)
+        coll_map = (2 * alpha_map * r - d * np.sin(alpha_map)) / (np.pi * r) + self.kappa
 
         # Rotate coll_map because, the mirroring effect is carried out later separately, and this coll_map
         # is applied on the un-mirrored convolution results.
@@ -407,20 +416,16 @@ class Simulation:
         # Sum the detector image stack into a single multiplexed image
         self.Detector_image_noisefree = np.sum(self.Detector_images_2D_raw, 2)
 
-        # Adjust detector image to given photon count:
-        # Split between transitioned photons (noise) and photons going through the pinholes (signal):
-        p_pattern = np.array(self.Photon_count_total / (1 + self.transmission_rate), np.float32)
-        p_noise = p_pattern * self.transmission_rate
+        # NEW TRANSMISSION NOISE MODEL: This should be much more correct:
+        # Noise is added per slice because it also depends on the object slice!
+        # t = self.transmission_rate
+        # self.Detector_image_noisefree = ((1.0 - t) * self.Detector_image_noisefree + t * self.slices.sum())
+        # EVEN NEWER: Transmission is now added right after the convolutions, like it is done in 3D-MLEM
 
-        # Added a small epsilon to the divisor:
+        # Normalize and adjust to photon count
         self.Detector_image_noisefree = self.Detector_image_noisefree / (np.sum(self.Detector_image_noisefree) + 1e-8)
-        self.Detector_image_noisefree = self.Detector_image_noisefree * p_pattern
-
-        # Add transmission noise as uniform noise and convert it to float32:
-        trans_noise = np.ones_like(self.Detector_image_noisefree) / np.prod(self.Detector_image_noisefree.shape)
-        trans_noise = trans_noise.astype(np.float32)
-        trans_noise = trans_noise * p_noise
-        self.Detector_image_noisefree = self.Detector_image_noisefree + trans_noise
+        self.Detector_image_noisefree = self.Detector_image_noisefree * self.Photon_count_total
+        self.Detector_image_noisefree = self.Detector_image_noisefree.astype(np.float32)
 
         # Replace entire image with poisson noise where each pixel is sampled from a poisson distribution with pixel
         # value as the mean
