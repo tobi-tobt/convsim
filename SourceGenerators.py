@@ -1,10 +1,9 @@
-
 import numpy as np
 import matplotlib.pyplot as plt
 
 
 class EllipsoidSourceGenerator():
-    def __init__(self, size_px, size_xy_mm, size_z_mm, centers_mm, radii_mm, intens, origin_mm):
+    def __init__(self, size_px, size_xy_mm, size_z_mm, centers_mm, radii_mm, intens, origin_mm, verbose=True):
         """
             Object coordinate: system origin is in the box center.
             Camera coordinate: system is right in front of the mask, with z pointing towards the object and x and y
@@ -20,6 +19,9 @@ class EllipsoidSourceGenerator():
         self.resolution_z = self.size_z_mm / self.size_px  # mm/pixel in z directions
         self.center_px = int(self.size_px / 2)  # the center_px pixel
         self.origin_mm = np.squeeze(origin_mm)
+        # Print or print not:
+        self.verbose = verbose
+
         # Vector from top left frontal corner pixel to the cube's center in mm:
         self.top_left_frontal_corner_mm = np.array([(self.size_px / 2.0 - 0.5) * self.resolution_xy,
                                                     (self.size_px / 2.0 - 0.5) * self.resolution_xy,
@@ -52,24 +54,24 @@ class EllipsoidSourceGenerator():
             # If any radius is smaller than 1px it is increased to 1px:
             if np.less(r_px, 1.0).any():
                 r_px = np.where(np.array(r_px) < 1.0, 1.0, r_px)
-                print("Radius was ceiled to 1px")
+                if self.verbose: print("Radius was ceiled to 1px")
 
             # Round indices to the nearest integers:
             c_px_rounded = np.round(c_px).astype(int)
             r_px_rounded = np.round(r_px).astype(int)
 
-            print("Object COS: (%.2f, %.2f, %.2f)mm. World COS: (%.2f, %.2f, %.2f)mm" % (*c_o_mm, *c_mm))
-            print("with radii: (%.2f, %.2f, %.2f)mm" % (*r_mm,))
-            print("Creating an ellipsoid at (%i, %i, %i)px with radii (%i, %i, %i)" % (*c_px_rounded, *r_px_rounded))
-            print("Retransforming rounded parameters back to world coordinate system yields: ")
-            print("(%.2f, %.2f, %.2f) with radius of (%.2f, %.2f, %.2f)mm"
-                  % (*(c_px_rounded * [self.resolution_xy, self.resolution_xy, self.resolution_z]
-                       - self.top_left_frontal_corner_mm + self.origin_mm),
-                     *(r_px_rounded * [self.resolution_xy, self.resolution_xy, self.resolution_z])))
+            if self.verbose:
+                print("Object COS: (%.2f, %.2f, %.2f)mm. World COS: (%.2f, %.2f, %.2f)mm" % (*c_o_mm, *c_mm))
+                print("with radii: (%.2f, %.2f, %.2f)mm" % (*r_mm,))
+                print("Creating an ellipsoid at (%i, %i, %i)px with radii (%i, %i, %i)" % (*c_px_rounded, *r_px_rounded))
+                print("Retransforming rounded parameters back to world coordinate system yields: ")
+                print("(%.2f, %.2f, %.2f) with radius of (%.2f, %.2f, %.2f)mm"
+                      % (*(c_px_rounded * [self.resolution_xy, self.resolution_xy, self.resolution_z]
+                           - self.top_left_frontal_corner_mm + self.origin_mm),
+                         *(r_px_rounded * [self.resolution_xy, self.resolution_xy, self.resolution_z])))
 
             # Draw ellipsoid into data cube:
             self.draw_ellipsoid3D(c_px_rounded, r_px_rounded, w)
-        # print("Done drawing circles.")
 
     def draw_ellipsoid3D(self, center_px, radius_px, intensity):
         """
@@ -172,7 +174,7 @@ class EllipsoidSourceGenerator():
         import matplotlib.pyplot as plt
         fig = plt.figure(figsize=(8, 8))
 
-        max_z = 1.1*(self.origin_mm[2]+self.size_z_mm/2)
+        max_z = 1.1 * (self.origin_mm[2] + self.size_z_mm / 2)
         z = np.linspace(-22, max_z, 100)
         # Optical axis:
         plt.plot([-b - 5, max_z], [0, 0], linestyle="--", color="black")
@@ -190,16 +192,16 @@ class EllipsoidSourceGenerator():
                     self.origin_mm[1] + self.top_left_frontal_corner_mm[1], label="TLF")
         plt.scatter(self.origin_mm[2], self.origin_mm[1], label="origin")
         # Draw cube:
-        zs = [self.origin_mm[2] - self.size_z_mm/2,
-              self.origin_mm[2] + self.size_z_mm/2,
-              self.origin_mm[2] + self.size_z_mm/2,
-              self.origin_mm[2] - self.size_z_mm/2,
-              self.origin_mm[2] - self.size_z_mm/2]
-        xs = [self.origin_mm[1] + self.size_xy_mm/2,
-              self.origin_mm[1] + self.size_xy_mm/2,
-              self.origin_mm[1] - self.size_xy_mm/2,
-              self.origin_mm[1] - self.size_xy_mm/2,
-              self.origin_mm[1] + self.size_xy_mm/2]
+        zs = [self.origin_mm[2] - self.size_z_mm / 2,
+              self.origin_mm[2] + self.size_z_mm / 2,
+              self.origin_mm[2] + self.size_z_mm / 2,
+              self.origin_mm[2] - self.size_z_mm / 2,
+              self.origin_mm[2] - self.size_z_mm / 2]
+        xs = [self.origin_mm[1] + self.size_xy_mm / 2,
+              self.origin_mm[1] + self.size_xy_mm / 2,
+              self.origin_mm[1] - self.size_xy_mm / 2,
+              self.origin_mm[1] - self.size_xy_mm / 2,
+              self.origin_mm[1] + self.size_xy_mm / 2]
         plt.plot(zs, xs, color="green")
 
         # Draw ellipsoid:
